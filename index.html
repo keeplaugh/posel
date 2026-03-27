@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Posel — Photo Selector</title>
+  <meta name="description" content="Pilih foto favorit Anda dari galeri dan kirim daftar pilihan via WhatsApp atau copy ke clipboard.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ========== ADMIN SETUP VIEW ========== -->
+  <div id="admin-view" class="view">
+    <div class="admin-container">
+      <div class="admin-header">
+        <div class="logo">
+          <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+            <rect width="40" height="40" rx="12" fill="url(#logo-grad)"/>
+            <path d="M12 26L16 18L20 22L26 14L28 26H12Z" fill="white" fill-opacity="0.9"/>
+            <circle cx="16" cy="14" r="3" fill="white" fill-opacity="0.9"/>
+            <defs><linearGradient id="logo-grad" x1="0" y1="0" x2="40" y2="40"><stop stop-color="#7c3aed"/><stop offset="1" stop-color="#06b6d4"/></linearGradient></defs>
+          </svg>
+          <h1>Posel</h1>
+        </div>
+        <p class="tagline">Buat galeri foto dari Google Drive dan biarkan client memilih.</p>
+      </div>
+
+      <form id="setup-form" class="glass-card" autocomplete="off">
+        <div class="form-group">
+          <label for="input-title">Judul Project</label>
+          <input type="text" id="input-title" placeholder="Contoh: Wedding Andi & Sari" required>
+        </div>
+
+        <div class="form-group">
+          <label for="input-drive-link">Link Folder Google Drive</label>
+          <input type="url" id="input-drive-link" placeholder="https://drive.google.com/drive/folders/..." required>
+          <span class="hint">Pastikan folder sudah di-share sebagai "Anyone with the link"</span>
+        </div>
+
+        <div class="form-group">
+          <label for="input-api-key">Google API Key</label>
+          <input type="text" id="input-api-key" placeholder="AIzaSy..." required>
+          <span class="hint">Dapatkan gratis di <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Google Cloud Console</a></span>
+        </div>
+
+        <div class="form-group">
+          <label for="input-wa">Nomor WhatsApp Tujuan</label>
+          <input type="tel" id="input-wa" placeholder="6281234567890" required>
+          <span class="hint">Format internasional tanpa tanda + (contoh: 6281234567890)</span>
+        </div>
+
+        <div class="form-group">
+          <label for="input-max">Batas Jumlah Foto</label>
+          <input type="number" id="input-max" min="0" value="0" placeholder="0">
+          <span class="hint">Isi 0 untuk tanpa batas</span>
+        </div>
+
+        <button type="submit" class="btn-primary" id="btn-generate">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M11 3L17 10L11 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M17 10H3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          Generate Link
+        </button>
+      </form>
+
+      <!-- Generated Link Output -->
+      <div id="link-output" class="glass-card" style="display:none;">
+        <label>Link untuk Client:</label>
+        <div class="link-box">
+          <input type="text" id="generated-link" readonly>
+          <button type="button" class="btn-copy-link" id="btn-copy-link" title="Copy link">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="13" height="13" rx="2" stroke="currentColor" stroke-width="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" stroke="currentColor" stroke-width="2"/></svg>
+          </button>
+        </div>
+        <p class="link-copied-msg" id="link-copied-msg">Link berhasil dicopy!</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== CLIENT GALLERY VIEW ========== -->
+  <div id="gallery-view" class="view" style="display:none;">
+    <!-- Top Bar -->
+    <header class="gallery-header">
+      <h1 id="gallery-title">Gallery</h1>
+      <div class="selection-counter" id="selection-counter">
+        <span id="count-selected">0</span> / <span id="count-max">∞</span> dipilih
+      </div>
+    </header>
+
+    <!-- Loading State -->
+    <div id="gallery-loading" class="loading-state">
+      <div class="spinner"></div>
+      <p>Memuat foto dari Google Drive...</p>
+    </div>
+
+    <!-- Error State -->
+    <div id="gallery-error" class="error-state" style="display:none;">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/><path d="M12 8v4M12 16h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <p id="error-message">Gagal memuat galeri.</p>
+    </div>
+
+    <!-- Photo Grid -->
+    <div id="photo-grid" class="photo-grid"></div>
+
+    <!-- Floating Action Bar -->
+    <div id="action-bar" class="action-bar" style="display:none;">
+      <button type="button" class="btn-action btn-copy" id="btn-copy-list">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="13" height="13" rx="2" stroke="currentColor" stroke-width="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" stroke="currentColor" stroke-width="2"/></svg>
+        Copy List
+      </button>
+      <button type="button" class="btn-action btn-wa" id="btn-send-wa">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347zM12.05 21.785h-.01a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.981.998-3.648-.235-.374A9.86 9.86 0 012.13 12.06C2.13 6.58 6.57 2.14 12.06 2.14a9.87 9.87 0 016.99 2.898 9.86 9.86 0 012.893 6.994c-.003 5.48-4.443 9.926-9.893 9.926v-.173zM20.52 3.449A11.83 11.83 0 0012.05.002C5.464.002.104 5.36.1 11.95a11.83 11.83 0 001.588 5.945L0 24l6.304-1.654a11.88 11.88 0 005.683 1.448h.005c6.585 0 11.946-5.36 11.95-11.95a11.83 11.83 0 00-3.422-8.395z"/></svg>
+        Kirim ke WA
+      </button>
+    </div>
+  </div>
+
+  <!-- ========== LIGHTBOX ========== -->
+  <div id="lightbox" class="lightbox" style="display:none;">
+    <button class="lightbox-close" id="lightbox-close" aria-label="Tutup">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
+    <button class="lightbox-nav lightbox-prev" id="lightbox-prev" aria-label="Sebelumnya">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <button class="lightbox-nav lightbox-next" id="lightbox-next" aria-label="Selanjutnya">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <img id="lightbox-img" src="" alt="Preview">
+    <div class="lightbox-caption" id="lightbox-caption"></div>
+  </div>
+
+  <!-- ========== TOAST ========== -->
+  <div id="toast" class="toast"></div>
+
+  <script src="script.js"></script>
+</body>
+</html>
