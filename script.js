@@ -12,8 +12,16 @@
   const DRIVE_VIEW_BASE = 'https://lh3.googleusercontent.com/d/';
   const IMAGE_MIMES = [
     'image/jpeg', 'image/png', 'image/webp', 'image/gif',
-    'image/bmp', 'image/tiff', 'image/heic', 'image/heif'
+    'image/bmp', 'image/tiff', 'image/heic', 'image/heif',
+    'image/x-adobe-dng',        // Adobe DNG (Digital Negative)
+    'image/x-canon-cr2',        // Canon CR2
+    'image/x-nikon-nef',        // Nikon NEF
+    'image/x-sony-arw',         // Sony ARW
+    'image/x-olympus-orf',      // Olympus ORF
+    'image/x-panasonic-rw2',    // Panasonic RW2
+    'image/x-dcraw',            // Generic RAW fallback
   ];
+  const OBFUSCATE_KEY = 'posel2026';  // Simple XOR key for URL obfuscation
 
   // ===== STATE =====
   let photos = [];           // { id, name, thumbUrl, fullUrl }
@@ -56,17 +64,58 @@
     toast: $('toast'),
   };
 
+  // ===== OBFUSCATION (simple XOR to hide API key from URL) =====
+  function xorEncode(str, key) {
+    let result = '';
+    for (let i = 0; i < str.length; i++) {
+      result += String.fromCharCode(str.charCodeAt(i) ^ key.charCodeAt(i % key.length));
+    }
+    // Convert to base64url (URL-safe base64)
+    return btoa(result).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  function xorDecode(encoded, key) {
+    // Restore standard base64
+    let b64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
+    while (b64.length % 4) b64 += '=';
+    const decoded = atob(b64);
+    let result = '';
+    for (let i = 0; i < decoded.length; i++) {
+      result += String.fromCharCode(decoded.charCodeAt(i) ^ key.charCodeAt(i % key.length));
+    }
+    return result;
+  }
+
   // ===== INIT =====
   function init() {
     const params = new URLSearchParams(window.location.search);
     const folderId = params.get('f');
-    const apiKey = params.get('k');
     const wa = params.get('w');
     const max = parseInt(params.get('m') || '0', 10);
     const title = params.get('t') || 'Gallery';
 
+    // Try to get API key: from URL (encoded) → then localStorage fallback
+    let apiKey = '';
+    const encodedKey = params.get('k');
+    if (encodedKey) {
+      try {
+        apiKey = xorDecode(encodedKey, OBFUSCATE_KEY);
+      } catch (e) {
+        apiKey = encodedKey; // fallback: treat as plain text
+      }
+    }
+    if (!apiKey) {
+      apiKey = localStorage.getItem('posel_api_key') || '';
+    }
+
     if (folderId && apiKey) {
+      // Save API key to localStorage for future use
+      localStorage.setItem('posel_api_key', apiKey);
       config = { folderId, apiKey, wa, max, title };
+      showGallery();
+    } else if (folderId && !apiKey) {
+      // Has folder but no key — show gallery with error prompt
+      config = { folderId, apiKey: '', wa, max, title };
       showGallery();
     } else {
       showAdmin();
@@ -104,10 +153,16 @@
       return;
     }
 
+    // Save API key to localStorage
+    localStorage.setItem('posel_api_key', apiKey);
+
+    // Encode the API key for URL
+    const encodedKey = xorEncode(apiKey, OBFUSCATE_KEY);
+
     const base = window.location.origin + window.location.pathname;
     const params = new URLSearchParams();
     params.set('f', folderId);
-    params.set('k', apiKey);
+    params.set('k', encodedKey);
     if (wa) params.set('w', wa);
     if (max > 0) params.set('m', max.toString());
     if (title) params.set('t', title);
